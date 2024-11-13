@@ -1,17 +1,18 @@
 import pandas as pd
 import msal
 import requests
-from config import CLIENT_ID, CLIENT_SECRET, TENANT_ID, EMAIL_ADDRESS, GRAPH_API_ENDPOINT, XLSX_PATH, EMAIL_TEMPLATE
+from config import CLIENT_ID, CLIENT_SECRET, TENANT_ID, EMAIL_ADDRESS, CC_EMAIL, GRAPH_API_ENDPOINT, XLSX_PATH, EMAIL_TEMPLATE
 import re
 import logging
 import sys
+import time
 
 # -------------------- Logging Configuration -------------------- #
 
 # Configure logging to write INFO and higher level messages to 'email_logs.log'
 logging.basicConfig(
-    filename='email_logs.log',
-    level=logging.DEBUG,  # Changed from INFO to DEBUG
+    filename='email_logs.log', # Create a logs file to record errors or successes
+    level=logging.DEBUG,  # Changed from INFO to DEBUG for more information
     format='%(asctime)s:%(levelname)s:%(message)s'
 )
 
@@ -38,7 +39,7 @@ def acquire_token(client_id, client_secret, tenant_id):
     )
     scopes = ["https://graph.microsoft.com/.default"]  # Scopes required by the app
 
-    logging.info("Attempting to acquire OAuth2 token.")
+    logging.info("Attempting to acquire OAuth2 token.") 
     result = app.acquire_token_for_client(scopes=scopes)
 
     if "access_token" in result:
@@ -82,9 +83,16 @@ def send_email(access_token, recipient, subject, body):
                         "address": recipient
                     }
                 }
+            ],
+            "ccRecipients": [
+                {
+                    "emailAddress": {
+                        "address": CC_EMAIL  # Static CC recipient
+                    }
+                }
             ]
         },
-        "saveToSentItems": "false"  # Change to "true" to save emails in Sent Items
+        "saveToSentItems": "true"  # true means that emails are saved in sent items
     }
 
     try:
@@ -169,9 +177,8 @@ def main():
         # Send the email using the Graph API
         send_email(access_token, to_email, subject, plain_text_content)
 
-        # Optional: Throttle emails to comply with sending limits
-        # Uncomment the following line to add a 1-second delay between emails
-        # time.sleep(1)
+        #Throttle emails to comply with sending limits
+        time.sleep(.5)
 
 if __name__ == "__main__":
     main()
