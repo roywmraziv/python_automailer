@@ -1,0 +1,143 @@
+import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from config import EMAIL_ADDRESS, EMAIL_PASSWORD, SMTP_SERVER, SMTP_PORT, XLSX_PATH, EMAIL_TEMPLATE
+import re
+import logging
+import time
+
+# -------------------- Configuration -------------------- #
+
+# SMTP Server Configuration
+smtp_server = SMTP_SERVER    # e.g., 'smtp.gmail.com' for Gmail
+smtp_port = SMTP_PORT                   # 587 for TLS, 465 for SSL
+email_address = EMAIL_ADDRESS      # Your email address
+email_password = EMAIL_PASSWORD       # Your email password or app-specific password
+
+# Email Template
+email_template = EMAIL_TEMPLATE
+
+# -------------------- Logging Configuration -------------------- #
+
+logging.basicConfig(filename='email_logs.log', level=logging.INFO,
+                    format='%(asctime)s:%(levelname)s:%(message)s')
+
+# -------------------- Function Definitions -------------------- #
+
+def is_valid_email(email):
+    """
+    Validates the email address using a simple regex.
+    """
+    regex = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+    return re.match(regex, email) is not None
+
+def send_email(to_address, subject, plain_text_content):
+    """
+    Sends an email to the specified address with the given subject and plaintext content.
+    Logs the result.
+    """
+    # Create a multipart message
+    msg = MIMEMultipart('alternative')
+    msg['From'] = email_address
+    msg['To'] = to_address
+    msg['Subject'] = subject
+
+    # Attach the plaintext content
+    #part = MIMEText(html_content, 'html')
+    part = MIMEText(plain_text_content, 'plain')
+
+    msg.attach(part)
+
+    try:
+        # Connect to the SMTP server
+
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()  # Secure the connection
+        server.set_debuglevel(1)
+
+        print("Logging in...")
+        server.login(email_address, email_password)  # Log in to the server
+        print(f"Sending email to {to_address}...")
+        server.sendmail(email_address, to_address, msg.as_string())  # Send the email
+        server.quit()  # Close the connection
+        print(f"Email successfully sent to {to_address}")
+        logging.info(f"Email sent to {to_address}")
+    except smtplib.SMTPRecipientsRefused:
+        error_msg = f"Recipient refused: {to_address}"
+        print(error_msg)
+        logging.error(error_msg)
+    except smtplib.SMTPAuthenticationError:
+        error_msg = "Authentication failed. Check your SMTP credentials."
+        print(error_msg)
+        logging.error(error_msg)
+    except smtplib.SMTPException as e:
+        error_msg = f"Failed to send email to {to_address}: {e}"
+        print(error_msg)
+        logging.error(error_msg)
+    except Exception as e:
+        error_msg = f"An unexpected error occurred while sending email to {to_address}: {e}"
+        print(error_msg)
+        logging.error(error_msg)
+
+# -------------------- Main Execution -------------------- #
+
+def main():
+    # Read the Excel file
+    try:
+        contacts = pd.read_excel('contacts.xlsx')
+    except FileNotFoundError:
+        error_msg = "The file 'contacts.xlsx' was not found."
+        print(error_msg)
+        logging.error(error_msg)
+        return
+    except Exception as e:
+        error_msg = f"An error occurred while reading 'contacts.xlsx': {e}"
+        print(error_msg)
+        logging.error(error_msg)
+        return
+
+    # Iterate through each contact and send email
+    for index, contact in contacts.iterrows():
+        to_email = contact.get('Email')
+        name = contact.get('Name', 'Valued Customer')
+
+        # Validate email address
+        if pd.isna(to_email):
+            warning_msg = f"Row {index + 2}: Missing email address. Skipping."
+            print(warning_msg)
+            logging.warning(warning_msg)
+            continue
+
+        if not is_valid_email(to_email):
+            warning_msg = f"Row {index + 2}: Invalid email address '{to_email}'. Skipping."
+            print(warning_msg)
+            logging.warning(warning_msg)
+            continue
+
+        # Format the email content using the plain text template
+        try:
+            plain_text_content = email_template.format(
+                name=name
+            )
+        except KeyError as e:
+            error_msg = f"Missing placeholder data {e} for email to {to_email}. Skipping."
+            print(error_msg)
+            logging.error(error_msg)
+            continue
+        except Exception as e:
+            error_msg = f"Error formatting email for {to_email}: {e}. Skipping."
+            print(error_msg)
+            logging.error(error_msg)
+            continue
+
+        subject = f"{name} - Henrich"
+
+        # Send the email
+        send_email(to_email, subject, plain_text_content)
+
+        # Commented out for single email testing
+        # time.sleep(1)  # Wait for 1 second between emails
+
+if __name__ == "__main__":
+    main()
