@@ -1,11 +1,31 @@
 import pandas as pd
 import msal
 import requests
-from config import CLIENT_ID, CLIENT_SECRET, TENANT_ID, EMAIL_ADDRESS, CC_EMAIL, GRAPH_API_ENDPOINT, XLSX_PATH, EMAIL_TEMPLATE
+from config import CLIENT_ID, CLIENT_SECRET, TENANT_ID, EMAIL_ADDRESS, CC_EMAIL, GRAPH_API_ENDPOINT, EMAIL_TEMPLATE
 import re
 import logging
 import sys
 import time
+import tkinter as tk
+from tkinter import filedialog
+
+# a method to select a chosen excel file for automailing
+def select_excel_file():
+    root = tk.Tk()
+    root.lift()
+    root.focus_force()
+
+    file_path = filedialog.askopenfilename (
+        title = "Select an excel file",
+        filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
+    )
+
+    if file_path:
+        print(f"File selected: {file_path}")
+        return file_path
+    else:
+        print("No file selected")
+        return None
 
 # -------------------- Logging Configuration -------------------- #
 
@@ -126,15 +146,16 @@ def main():
 
     # Step 2: Read Contacts from Excel
     try:
-        contacts = pd.read_excel(XLSX_PATH)
-        logging.info(f"Successfully read {len(contacts)} contacts from '{XLSX_PATH}'.")
+        excel_file = select_excel_file()
+        contacts = pd.read_excel(excel_file)
+        logging.info(f"Successfully read {len(contacts)} contacts from '{excel_file}'.")
     except FileNotFoundError:
-        error_msg = f"The file '{XLSX_PATH}' was not found."
+        error_msg = f"The file '{excel_file}' was not found."
         logging.error(error_msg)
         print(error_msg)
         sys.exit(1)  # Exit the script if the Excel file is not found
     except Exception as e:
-        error_msg = f"An error occurred while reading '{XLSX_PATH}': {e}"
+        error_msg = f"An error occurred while reading '{excel_file}': {e}"
         logging.error(error_msg)
         print(error_msg)
         sys.exit(1)  # Exit the script for any other read errors
@@ -142,7 +163,7 @@ def main():
     # Step 3: Iterate Through Contacts and Send Emails
     for index, contact in contacts.iterrows():
         to_email = contact.get('Email')
-        name = contact.get('Name', 'Valued Customer')  # Default name if missing
+        name = contact.get('Name', 'Friend')  # Default name if missing
 
         # Validate email address
         if pd.isna(to_email):
@@ -178,7 +199,7 @@ def main():
         send_email(access_token, to_email, subject, plain_text_content)
 
         #Throttle emails to comply with sending limits
-        time.sleep(.5)
+        time.sleep(1.5)
 
 if __name__ == "__main__":
     main()
