@@ -1,7 +1,7 @@
 import pandas as pd
 import msal
 import requests
-from config import CLIENT_ID, CLIENT_SECRET, TENANT_ID, EMAIL_ADDRESS, CC_EMAIL, GRAPH_API_ENDPOINT, EMAIL_TEMPLATE
+from config import EMAIL_TEMPLATES, CLIENT_ID, CLIENT_SECRET, TENANT_ID, EMAIL_ADDRESS, CC_EMAIL, GRAPH_API_ENDPOINT
 import re
 import logging
 import sys
@@ -9,6 +9,34 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 
+# -------------------- Template and File Selection -------------------- #
+
+# choose a template to send
+def choose_template():
+    if len(EMAIL_TEMPLATES) == 1:
+        return next(iter(EMAIL_TEMPLATES.values()))
+    
+    print("\nChoose an email template from the following by entering the corresponding number.")
+    
+    # Display the templates with their corresponding indices
+    for index, key in enumerate(EMAIL_TEMPLATES):
+        print(f"{index}: {key}")
+    
+    # Get the user's choice
+    template_choice = input("Template number: ")
+    
+    # Validate the choice
+    while not template_choice.isdigit() or int(template_choice) not in range(len(EMAIL_TEMPLATES)):
+        template_choice = input("Enter a valid template choice: ")
+    
+    # Get the selected template
+    template = list(EMAIL_TEMPLATES.values())[int(template_choice)]
+    template_name = list(EMAIL_TEMPLATES.keys())[int(template_choice)]
+    print(f"You have selected {template_name}")
+    return template
+
+
+    
 # a method to select a chosen excel file for automailing
 def select_excel_file():
     root = tk.Tk()
@@ -160,10 +188,15 @@ def main():
         print(error_msg)
         sys.exit(1)  # Exit the script for any other read errors
 
-    # Step 3: Iterate Through Contacts and Send Emails
+    # Step 3 : Choose the email template
+    email_template = choose_template()
+
+    # Step 4: Iterate Through Contacts and Send Emails
     for index, contact in contacts.iterrows():
         to_email = contact.get('Email')
         name = contact.get('Name', 'Friend')  # Default name if missing
+        company = contact.get('Company', 'Valued Partner')  # Default to 'Valued Partner' if 'company' is missing
+
 
         # Validate email address
         if pd.isna(to_email):
@@ -180,7 +213,7 @@ def main():
 
         # Format the email content using the plain text template
         try:
-            plain_text_content = EMAIL_TEMPLATE.format(name=name)
+            plain_text_content = email_template.format(name=name, company=company)
         except KeyError as e:
             error_msg = f"Missing placeholder data {e} for email to {to_email}. Skipping."
             logging.error(error_msg)
@@ -193,13 +226,16 @@ def main():
             continue  # Skip to the next contact for any other formatting errors
 
         # Define the subject of the email
-        subject = f"{name} - Henrich"
+        if "{company}" in email_template:
+            subject = f"{company} - Henrich"
+        else:
+            subject = f"{name} - Henrich"
 
         # Send the email using the Graph API
         send_email(access_token, to_email, subject, plain_text_content)
 
         #Throttle emails to comply with sending limits
-        time.sleep(1.5)
+        time.sleep(2)
 
 if __name__ == "__main__":
     main()
