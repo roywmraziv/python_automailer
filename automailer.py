@@ -8,6 +8,9 @@ import sys
 import time
 import tkinter as tk
 from tkinter import filedialog
+from validate_email import validate_email
+import smtplib
+import dns.resolver
 
 # -------------------- Template and File Selection -------------------- #
 
@@ -35,6 +38,29 @@ def choose_template():
     print(f"You have selected {template_name}")
     return template
 
+# -------------------- Custom Email Validation -------------------- #
+def verify_email_address(email):
+    try:
+        # Extract the domain from the email
+        domain = email.split('@')[1]
+
+        # Get MX record for the domain
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        mx_host = str(mx_records[0].exchange)
+
+        # Connect to the mail server
+        server = smtplib.SMTP(mx_host)
+        server.set_debuglevel(0)  # Set to 1 for verbose debug output
+        server.helo()
+        server.mail(EMAIL_ADDRESS)  # Use your valid email address
+        code, message = server.rcpt(email)  # Check if the email exists
+        server.quit()
+
+        # 250 response code means the email exists
+        return code == 250
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
     
 # a method to select a chosen excel file for automailing
@@ -199,6 +225,18 @@ def main():
 
 
         # Validate email address
+        if verify_email_address(to_email):
+            warning_msg = f"Email address: {to_email} is invalid. Domain may be unreachable."
+            logging.warning(warning_msg)
+            print(warning_msg)
+            continue
+
+        if validate_email(to_email):
+            warning_msg = f"Email address: {to_email} is invalid. Domain may be unreachable."
+            logging.warning(warning_msg)
+            print(warning_msg)
+            continue
+
         if pd.isna(to_email):
             warning_msg = f"Row {index + 2}: Missing email address. Skipping."
             logging.warning(warning_msg)
@@ -235,7 +273,7 @@ def main():
         send_email(access_token, to_email, subject, plain_text_content)
 
         #Throttle emails to comply with sending limits
-        time.sleep(2)
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
